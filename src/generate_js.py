@@ -18,7 +18,9 @@ def resize_file_if_large(filePath, maxBytes): #100 000 000 bytes is 100mb
         command = f'convert "{filePath}" -resize 512x -quality 80 "{filePath}"'
         # print(os.path.splitext(filePath)[1])
         if os.path.splitext(filePath)[1] == ".gif": #check if gif
-            command = f'convert "{filePath}" -coalesce -resize 512x -colors 64 -deconstruct "{filePath}"'
+            # command = f'convert "{filePath}" -coalesce -resize 512x -colors 64 -deconstruct "{filePath}"'
+            command = f'convert "{filePath}"  -resize 512x -colors 64 "{filePath}"'
+            # print("testing if gid is complete lenght")
 
         subprocess.run(command, shell=True)
         
@@ -45,7 +47,7 @@ def preProcessImages(item, week_folder_path, nestedDir=None):
 
 
             processed_dir = os.path.join(week_folder_path, "processed")
-            optionalArgs = ""
+            optionalArgs = "-fuzz 10% -transparent white"
             resizeArg = "-resize 512x512 "
             print(f"processing {item}")    
 
@@ -60,7 +62,8 @@ def preProcessImages(item, week_folder_path, nestedDir=None):
                 print("contains long")
             
             os.makedirs(processed_dir, exist_ok=True)
-            saveImg = os.path.splitext(item)[0] + "_pr" + os.path.splitext(item)[1] #save img with given extension
+            # saveImg = os.path.splitext(item)[0] + "_pr" + os.path.splitext(item)[1] #save img with given extension
+            saveImg = os.path.splitext(item)[0] + "_pr.png" #save img with given extension
             processed_path = os.path.join(processed_dir, saveImg)
 
             remove_too_big(item_path, 10000, 10000)
@@ -119,7 +122,7 @@ def preProcessText(item, week_folder_path, nestedDir=None):
                 print(f'{item} -> text file written')
 
             
-            os.system(f'convert -background none -size 512x -pointsize 20 -define pango:justify=true pango:@"{processedTextForImg}" "{processed_path}"')
+            os.system(f'convert -background none -size 512x512 -pointsize 20 -define pango:justify=true pango:@"{processedTextForImg}" "{processed_path}"')
             os.remove(processedTextForImg)
             text.append(processedTextForHTML)
             week.append(processed_path)
@@ -164,10 +167,12 @@ def preProcessPdfs(item, week_folder_path, nestedDir=None):
 
 def preProcessGifs(item, week_folder_path, nestedDir=None):
     item_path = os.path.join(week_folder_path, item)   
-    
+    print(item_path)
     if os.path.isfile(item_path):
         if item.lower().endswith((".gif")):
             processed_dir = os.path.join(week_folder_path, "processed")
+
+            resize_file_if_large(item_path, 1000000) #1mb max, for uploading mainly
 
             optionalArgs = ''
             if nestedDir != None:
@@ -178,12 +183,11 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
             os.makedirs(processed_dir, exist_ok=True)
 
             if not re.search(r"preProcessed", item_path):
-                # print(item_path)
                 gifTempFolder = os.path.join(week_folder_path, "gifTemp")                
                 os.mkdir(gifTempFolder)
                 tempImgPath = os.path.join(gifTempFolder, os.path.splitext(item)[0] + "_preProcessed")
                 
-                os.system(f'convert "{item_path}" -coalesce -sharpen 0x1 -resize 512x  {tempImgPath}.png')
+                os.system(f'convert "{item_path}" -coalesce -sharpen 0x1 -resize 512x  "{tempImgPath}.png"')
                 
                 divider = math.ceil(len(os.listdir(gifTempFolder))*0.1)
                 # print(divider)
@@ -192,12 +196,14 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
                     if i%divider!=0:
                         os.remove(tempImg)
 
+                print(tempImgPath)
                 # make sadditional alpha images if tht total is not 10
-                additionalImg = (10-len(natsorted(os.listdir(gifTempFolder))))
+                nFrames = 10
+                additionalImg = (nFrames-len(natsorted(os.listdir(gifTempFolder))))
                 if additionalImg !=0:
                     for i in range(0,additionalImg):
-                        i = 10 - i
-                        os.system(f'convert -size 512x512 xc:none -alpha transparent {os.path.join(gifTempFolder, f"zzz_{i}.png")}')
+                        i = nFrames - i
+                        os.system(f'convert -size 512x512 xc:none -alpha transparent "{os.path.join(gifTempFolder, f"zzz_{i}.png")}"')
                 
                 # rename the files so sorting them wont be an issue
                 for i, img in enumerate(natsorted(os.listdir(gifTempFolder))):
@@ -212,7 +218,6 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
                 processed_path_gif = os.path.join(processed_dir, f'{item}_preProcessed.gif')
                 os.system(f'convert "{item_path}" -coalesce -resize 512x -colors 32 -deconstruct {optionalArgs} "{processed_path_gif}"')
 
-                resize_file_if_large(item_path, 1000000) #1mb max, for uploading mainly
 
                 images.append("../" + processed_path_gif) #save normal pdfs so it diplays in info
                 week.append(processed_path) #save alpha pdfs so it diplays in three.js
@@ -398,7 +403,7 @@ for group in sorted(os.listdir("content")):
                         imgArray.append(images)
     
 
-                        os.system(f"""convert -background none -size 256x256 -pointsize 20 -define pango:justify=true  pango:"<span foreground=\\"gray\\">content: {week_folder}</span> " ./{additional_folder_path}/ref_{week_folder}.png""")
+                        os.system(f"""convert -background none -size 512x512 -pointsize 20 -define pango:justify=true  pango:"<span foreground=\\"white\\">content: {week_folder}</span> " ./{additional_folder_path}/ref_{week_folder}.png""")
                         week.append(f'./{additional_folder_path}/ref_{week_folder}.png')
                         weeks.append(week)
 
