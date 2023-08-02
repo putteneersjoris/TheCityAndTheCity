@@ -7,6 +7,7 @@ import re
 import subprocess
 from pdf2image import convert_from_path
 import math
+from PIL import Image
 
 # preprocessing functions
 
@@ -15,9 +16,11 @@ def resize_file_if_large(filePath, maxBytes): #100 000 000 bytes is 100mb
     if file_size > maxBytes:
         print(f"{filePath} is too big with {file_size}bytes. It will be modified. Max bytes is {maxBytes}")
         command = f'convert "{filePath}" -resize 512x -quality 80 "{filePath}"'
-        print(os.path.splitext(filePath)[1])
+        # print(os.path.splitext(filePath)[1])
         if os.path.splitext(filePath)[1] == ".gif": #check if gif
-            command = f'convert "{filePath}" -coalesce -resize 512x -colors 64 -deconstruct "{filePath}"'
+            # command = f'convert "{filePath}" -coalesce -resize 512x -colors 64 -deconstruct "{filePath}"'
+            command = f'convert "{filePath}"  -resize 512x -colors 64 "{filePath}"'
+            # print("testing if gid is complete lenght")
 
         subprocess.run(command, shell=True)
         
@@ -28,33 +31,45 @@ def remove_unsupported_file(file_path):
             os.remove(file_path)
             print(f'{file_path} is not supported and is removed, please use one of the supported extensions {supported_extensions}')
 
+def remove_too_big(file_path, maxWidth, maxHeight):
+    if os.path.isfile(file_path):
+        imageToProcess = Image.open(file_path)
+        width, height = imageToProcess.size
+
+        if width > maxWidth or height > maxHeight:
+            print("Too big to process.")
+            os.remove(file_path)
+
 def preProcessImages(item, week_folder_path, nestedDir=None):
     item_path = os.path.join(week_folder_path, item)   
     if os.path.isfile(item_path):
         if item_path.lower().endswith((".jpg", ".png", ".jpeg")):
 
+
             processed_dir = os.path.join(week_folder_path, "processed")
-            optionalArgs = ""
-            resizeArg = "-resize 512x "
+            optionalArgs = "-fuzz 10% -transparent white"
+            resizeArg = "-resize 512x512 "
+            print(f"processing {item}")    
 
             if nestedDir != None:
                 print("nested directory -images- is activated")
                 processed_dir = os.path.join(nestedDir, "processed")
-                optionalArgs = "-negate"
+                optionalArgs = "-fuzz 20% -transparent white  "  #-negate
                 
             # if filename contains "long" in filename, set resize to 512x512
-            print(os.path.splitext(item)[0])
             if "long" in os.path.splitext(item)[0]:
                 resizeArg = "-resize x512 "
                 print("contains long")
             
-            
             os.makedirs(processed_dir, exist_ok=True)
-            saveImg = os.path.splitext(item)[0] + "_pr.png"
+            # saveImg = os.path.splitext(item)[0] + "_pr" + os.path.splitext(item)[1] #save img with given extension
+            saveImg = os.path.splitext(item)[0] + "_pr.png" #save img with given extension
             processed_path = os.path.join(processed_dir, saveImg)
-            os.system(f'convert "{item_path}" {resizeArg} -interpolate nearest-neighbor -sharpen 0x1 {optionalArgs} "{processed_path}"')
 
+            remove_too_big(item_path, 10000, 10000)
+            os.system(f'convert "{item_path}" {resizeArg} -interpolate nearest-neighbor -sharpen 0x2 -quality 50 {optionalArgs} "{processed_path}"')
 
+            
             resize_file_if_large(item_path, 1000000) #1mb max, for uploading mainly
 
             images.append("../" + processed_path) #save normal pdfs so it diplays in info
@@ -95,6 +110,7 @@ def preProcessText(item, week_folder_path, nestedDir=None):
 
             modified_content = re.sub(r'<iframe\b[^>]*>.*?</iframe>', '', content, flags=re.DOTALL)
             modified_content = f'<span foreground="{textColor}">' + modified_content + "</span>\n"
+            modified_content = modified_content.replace("&", "and")
 
             with open(processedTextForImg, "w") as new_file:
                 new_file.write(modified_content)
@@ -106,7 +122,7 @@ def preProcessText(item, week_folder_path, nestedDir=None):
                 print(f'{item} -> text file written')
 
             
-            os.system(f'convert -background none -size 512x -pointsize 20 -define pango:justify=true pango:@"{processedTextForImg}" "{processed_path}"')
+            os.system(f'convert -background none -size 512x512 -pointsize 20 -define pango:justify=true pango:@"{processedTextForImg}" "{processed_path}"')
             os.remove(processedTextForImg)
             text.append(processedTextForHTML)
             week.append(processed_path)
@@ -151,26 +167,27 @@ def preProcessPdfs(item, week_folder_path, nestedDir=None):
 
 def preProcessGifs(item, week_folder_path, nestedDir=None):
     item_path = os.path.join(week_folder_path, item)   
-    
+    print(item_path)
     if os.path.isfile(item_path):
         if item.lower().endswith((".gif")):
             processed_dir = os.path.join(week_folder_path, "processed")
+
+            resize_file_if_large(item_path, 1000000) #1mb max, for uploading mainly
 
             optionalArgs = ''
             if nestedDir != None:
                 print("nested directory -gif- is activated")
                 processed_dir = os.path.join(nestedDir, "processed")
-                optionalArgs = "-negate"
+                optionalArgs = " -fuzz 10% -transparent black"
 
             os.makedirs(processed_dir, exist_ok=True)
 
             if not re.search(r"preProcessed", item_path):
-                # print(item_path)
                 gifTempFolder = os.path.join(week_folder_path, "gifTemp")                
                 os.mkdir(gifTempFolder)
                 tempImgPath = os.path.join(gifTempFolder, os.path.splitext(item)[0] + "_preProcessed")
                 
-                os.system(f'convert "{item_path}" -coalesce -sharpen 0x1 -resize 512x  {tempImgPath}.png')
+                os.system(f'convert "{item_path}" -coalesce -sharpen 0x1 -resize 512x  "{tempImgPath}.png"')
                 
                 divider = math.ceil(len(os.listdir(gifTempFolder))*0.1)
                 # print(divider)
@@ -179,12 +196,14 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
                     if i%divider!=0:
                         os.remove(tempImg)
 
+                print(tempImgPath)
                 # make sadditional alpha images if tht total is not 10
-                additionalImg = (10-len(natsorted(os.listdir(gifTempFolder))))
+                nFrames = 10
+                additionalImg = (nFrames-len(natsorted(os.listdir(gifTempFolder))))
                 if additionalImg !=0:
                     for i in range(0,additionalImg):
-                        i = 10 - i
-                        os.system(f'convert -size 512x512 xc:none -alpha transparent {os.path.join(gifTempFolder, f"zzz_{i}.png")}')
+                        i = nFrames - i
+                        os.system(f'convert -size 512x512 xc:none -alpha transparent "{os.path.join(gifTempFolder, f"zzz_{i}.png")}"')
                 
                 # rename the files so sorting them wont be an issue
                 for i, img in enumerate(natsorted(os.listdir(gifTempFolder))):
@@ -197,9 +216,8 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
 
                 #  make the gif resize and save it
                 processed_path_gif = os.path.join(processed_dir, f'{item}_preProcessed.gif')
-                os.system(f'convert "{item_path}" -coalesce -resize 512x -colors 32 -deconstruct {optionalArgs} "{processed_path_gif}"')
+                os.system(f'convert "{item_path}" -coalesce -resize 512x -colors 32 -deconstruct -loop 0  {optionalArgs} "{processed_path_gif}"')
 
-                resize_file_if_large(item_path, 1000000) #1mb max, for uploading mainly
 
                 images.append("../" + processed_path_gif) #save normal pdfs so it diplays in info
                 week.append(processed_path) #save alpha pdfs so it diplays in three.js
@@ -232,8 +250,9 @@ def generate_html_file(filename, title, groupContent, weeks, content, images, gr
                     if file_extension.strip().lower() == ".txt":
                         with open(file_path, 'r') as groupFile:
                             text_content = groupFile.read()
+                            
         
-                        
+        
         file.write(f"<p>{text_content}</p>\n")
 
         for week, week_content, week_images in zip(weeks, content, images):
@@ -243,7 +262,7 @@ def generate_html_file(filename, title, groupContent, weeks, content, images, gr
             file.write("<div>\n")
             for text_item in week_content:
                 with open(text_item, 'r') as text_file:
-                    content = text_file.read()
+                    content = text_file.read().replace('\n', '<br>')     
                     file.write(f"<p>{content}</p>\n")
             file.write("</div>\n")
             
@@ -384,7 +403,7 @@ for group in sorted(os.listdir("content")):
                         imgArray.append(images)
     
 
-                        os.system(f"""convert -background none -size 256x256 -pointsize 20 -define pango:justify=true  pango:"<span foreground=\\"white\\">content: {week_folder}</span> " ./{additional_folder_path}/ref_{week_folder}.png""")
+                        os.system(f"""convert -background none -size 512x512 -pointsize 20 -define pango:justify=true  pango:"<span foreground=\\"white\\">content: {week_folder}</span> " ./{additional_folder_path}/ref_{week_folder}.png""")
                         week.append(f'./{additional_folder_path}/ref_{week_folder}.png')
                         weeks.append(week)
 
