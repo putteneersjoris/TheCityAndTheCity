@@ -178,7 +178,7 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
             if nestedDir != None:
                 print("nested directory -gif- is activated")
                 processed_dir = os.path.join(nestedDir, "processed")
-                optionalArgs = " -fuzz 10% -transparent black"
+                optionalArgs = " "
 
             os.makedirs(processed_dir, exist_ok=True)
 
@@ -187,7 +187,7 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
                 os.mkdir(gifTempFolder)
                 tempImgPath = os.path.join(gifTempFolder, os.path.splitext(item)[0] + "_preProcessed")
                 
-                os.system(f'convert "{item_path}" -coalesce -sharpen 0x1 -resize 512x  "{tempImgPath}.png"')
+                os.system(f'convert "{item_path}" -coalesce -sharpen 0x1 -resize 512x512!  "{tempImgPath}.png"')
                 
                 divider = math.ceil(len(os.listdir(gifTempFolder))*0.1)
                 # print(divider)
@@ -212,7 +212,7 @@ def preProcessGifs(item, week_folder_path, nestedDir=None):
                     os.rename(originalPath, newPath)
 
                 processed_path = os.path.join(processed_dir, f'{item}_preProcessed_long_.png')
-                os.system(f'convert "{os.path.join(gifTempFolder, "*.png")}" -resize 512x -append {optionalArgs} "{processed_path}"')
+                os.system(f'convert "{os.path.join(gifTempFolder, "*.png")}" -resize 512x512 -fuzz 10% -transparent black -fuzz 10% -transparent DimGray -append {optionalArgs} "{processed_path}"')
 
                 #  make the gif resize and save it
                 processed_path_gif = os.path.join(processed_dir, f'{item}_preProcessed.gif')
